@@ -1,0 +1,185 @@
+rules_version = '2';
+
+// ============================================================
+//  REGLAS DE SEGURIDAD — Sistema inmobiliariadelmet
+//  ------------------------------------------------------------
+//  MODELO "POR LINK":
+//   - Cualquiera con sesión iniciada puede crear SU PROPIO perfil
+//     en "usuariosAutorizados" (se hace solo, la primera vez que
+//     entra por la app) — pero SIEMPRE con rol "Ejecutivo JR 2G"
+//     (el nivel más bajo del escalafón). Nadie puede auto-asignarse
+//     un nivel mayor, ni "Director", desde la app.
+//   - Escalafón, de menor a mayor: "Ejecutivo JR 2G" → "Ejecutivo
+//     JR 1G" → "Ejecutivo SR" → "Líder JR" → "Líder SR" →
+//     "Director". Solo el dueño del sistema (Director) sube o baja
+//     de nivel a cada quien, a mano, desde la consola de Firebase
+//     (editando el campo "rol" del documento correspondiente).
+//   - El único perfil con rol "Director" lo crea el dueño del
+//     sistema a mano, una vez, desde la consola de Firebase.
+//   - Un ejecutivo solo puede leer/escribir SUS PROPIOS registros
+//     (prospectos, visitas, asistencia, etc. — los que tengan
+//     autorEmail == su correo). El Director puede leer/escribir los
+//     de todo el mundo.
+//   - "Mi Agenda" y "Mapa de Sueños" son siempre privados de cada
+//     quien, incluso para el Director (son personales).
+//   - EXCEPCIÓN 1: un Líder JR/SR puede leer el "resumen" de agenda
+//     (colección agendaResumen: solo actividad + fecha, sin el
+//     detalle ni ningún dato de cliente) de los Ejecutivos SR, JR 1G
+//     y JR 2G — nunca de otros Líderes ni del Director, y nunca la
+//     colección "agenda" completa (esa sigue privada de cada quien).
+//   - EXCEPCIÓN 2: TODO el equipo puede leer el "resumen" de visitas
+//     (colección visitasResumen: solo estado/resultado/fecha, sin
+//     cliente, teléfono, proyecto ni observaciones) — es lo que
+//     alimenta "Ranking Visitas" para fomentar la competencia sana.
+//     La colección "visitas" completa sigue privada de cada quien
+//     (el Director sí ve todo, como el resto de los módulos).
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function estaAutenticado() {
+      return request.auth != null && request.auth.token.email != null;
+    }
+
+    function miCorreo() {
+      return request.auth.token.email.lower();
+    }
+
+    function miPerfil() {
+      return get(/databases/$(database)/documents/usuariosAutorizados/$(miCorreo())).data;
+    }
+
+    function estaAutorizado() {
+      return estaAutenticado() &&
+        exists(/databases/$(database)/documents/usuariosAutorizados/$(miCorreo())) &&
+        miPerfil().activo == true;
+    }
+
+    // Solo válido para usarse DESPUÉS de estaAutorizado() (por el
+    // && de la izquierda ya sabemos que el perfil existe).
+    function esDirector() {
+      return miPerfil().rol == "Director";
+    }
+
+    // Solo válido para usarse DESPUÉS de estaAutorizado().
+    function esLider() {
+      return miPerfil().rol == "Líder JR" || miPerfil().rol == "Líder SR";
+    }
+
+    // Los tres niveles de Ejecutivo (los que un Líder puede "ver" en
+    // el resumen de agenda, nunca en el resto de los módulos).
+    function esRangoEjecutivo(rol) {
+      return rol == "Ejecutivo JR 2G" || rol == "Ejecutivo JR 1G" || rol == "Ejecutivo SR";
+    }
+
+    // Puede ver/editar un registro si es suyo o si es Director.
+    function esPropioOEsDirector(datos) {
+      return esDirector() || datos.autorEmail == miCorreo();
+    }
+
+    // ---------- Perfiles de usuario ----------
+    match /usuariosAutorizados/{correo} {
+      allow get: if estaAutenticado() && miCorreo() == correo;
+      allow list: if estaAutorizado() && esDirector();
+      // Autorregistro: cada quien crea SU perfil, siempre en el
+      // nivel más bajo del escalafón ("Ejecutivo JR 2G") y activo —
+      // nunca puede crearse con un nivel mayor ni como "Director",
+      // ni crear el perfil de otra persona.
+      allow create: if estaAutenticado() && miCorreo() == correo
+                    && request.resource.data.rol == "Ejecutivo JR 2G"
+                    && request.resource.data.activo == true;
+      // Cambios de nivel/rol (ascensos, descensos) o desactivar a
+      // alguien: solo a mano desde la consola de Firebase (con
+      // permisos de administrador), nunca desde la app.
+      allow update, delete: if false;
+    }
+
+    // ---------- Datos de negocio: privados por defecto ----------
+    // Cada ejecutivo ve/edita solo lo suyo; el Director ve/edita todo.
+    match /prospectos/{docId} {
+      allow read, update, delete: if estaAutorizado() && esPropioOEsDirector(resource.data);
+      allow create: if estaAutorizado() && request.resource.data.autorEmail == miCorreo();
+    }
+    match /visitas/{docId} {
+      allow read, update, delete: if estaAutorizado() && esPropioOEsDirector(resource.data);
+      allow create: if estaAutorizado() && request.resource.data.autorEmail == miCorreo();
+    }
+
+    // ---------- Resumen de visitas (sin datos de cliente) ----------
+    // Se guarda junto con cada "visita", pero SOLO con campos
+    // agregables (estado, resultado, fecha, autor) — nunca cliente,
+    // teléfono, proyecto, lote u observaciones. Por eso puede ser
+    // visible para TODO el equipo en Ranking Visitas sin exponer
+    // información privada de ningún negocio.
+    match /visitasResumen/{docId} {
+      allow read: if estaAutorizado();
+      allow create: if estaAutorizado()
+        && request.resource.data.autorEmail == miCorreo()
+        && request.resource.data.autorRol == miPerfil().rol
+        && request.resource.data.keys().hasOnly(["autorEmail", "autor", "autorRol", "estado", "resultado", "fecha", "actualizado"]);
+      allow update: if estaAutorizado()
+        && resource.data.autorEmail == miCorreo()
+        && request.resource.data.autorEmail == miCorreo()
+        && request.resource.data.autorRol == miPerfil().rol
+        && request.resource.data.keys().hasOnly(["autorEmail", "autor", "autorRol", "estado", "resultado", "fecha", "actualizado"]);
+      allow delete: if estaAutorizado() && (resource.data.autorEmail == miCorreo() || esDirector());
+    }
+
+    match /asistencia/{docId} {
+      allow read, update, delete: if estaAutorizado() && esPropioOEsDirector(resource.data);
+      allow create: if estaAutorizado() && request.resource.data.autorEmail == miCorreo();
+    }
+    match /pqrs/{docId} {
+      allow read, update, delete: if estaAutorizado() && esPropioOEsDirector(resource.data);
+      allow create: if estaAutorizado() && request.resource.data.autorEmail == miCorreo();
+    }
+    match /bitacora/{docId} {
+      allow read, update, delete: if estaAutorizado() && esPropioOEsDirector(resource.data);
+      allow create: if estaAutorizado() && request.resource.data.autorEmail == miCorreo();
+    }
+    match /acompanamientos/{docId} {
+      allow read, update, delete: if estaAutorizado() && esPropioOEsDirector(resource.data);
+      allow create: if estaAutorizado() && request.resource.data.autorEmail == miCorreo();
+    }
+    match /panelEstrategico/{docId} {
+      allow read, update, delete: if estaAutorizado() && esPropioOEsDirector(resource.data);
+      allow create: if estaAutorizado() && request.resource.data.autorEmail == miCorreo();
+    }
+
+    // ---------- Siempre privados, incluso para el Director ----------
+    match /agenda/{docId} {
+      allow read, update, delete: if estaAutorizado() && resource.data.autorEmail == miCorreo();
+      allow create: if estaAutorizado() && request.resource.data.autorEmail == miCorreo();
+    }
+
+    // ---------- Resumen de agenda (solo actividad + fecha) ----------
+    // Se guarda junto con cada entrada de "agenda", pero SIN el
+    // campo "texto" (detalle) — así, aunque un Líder pueda leerlo,
+    // es estructuralmente imposible que reciba el detalle o datos de
+    // clientes: ese campo nunca llega a esta colección.
+    match /agendaResumen/{docId} {
+      allow read: if estaAutorizado() && (
+        resource.data.autorEmail == miCorreo() ||
+        esDirector() ||
+        (esLider() && esRangoEjecutivo(resource.data.autorRol))
+      );
+      allow create: if estaAutorizado()
+        && request.resource.data.autorEmail == miCorreo()
+        && request.resource.data.autorRol == miPerfil().rol
+        && request.resource.data.keys().hasOnly(["titulo", "fecha", "autor", "autorEmail", "autorRol", "creado"]);
+      allow delete: if estaAutorizado() && (resource.data.autorEmail == miCorreo() || esDirector());
+      allow update: if false;
+    }
+
+    match /mapaSuenos/{docId} {
+      allow read, update, delete: if estaAutorizado() && resource.data.autorEmail == miCorreo();
+      allow create: if estaAutorizado() && request.resource.data.autorEmail == miCorreo();
+    }
+
+    // Cualquier otra ruta no declarada explícitamente: denegada.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

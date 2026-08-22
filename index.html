@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sistema inmobiliariadelmet</title>
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- ============ PANTALLA DE AUTENTICACIÓN ============ -->
+<div id="auth-screen">
+  <div class="auth-card">
+
+    <div class="auth-brand">
+      <div class="logo-mark">IM</div>
+      <h1>inmobiliariadelmet</h1>
+      <p>Sistema comercial de inmobiliariadelmet. Proyectos campestres en el Meta.</p>
+    </div>
+
+    <div id="auth-msg" class="auth-msg"></div>
+
+    <!-- ---- Login ---- -->
+    <form id="form-login" class="auth-form active">
+      <h3 style="margin:0 0 4px;font-size:0.95rem;color:var(--azul-noche);">Entrar al sistema</h3>
+      <p style="margin:0 0 16px;font-size:0.78rem;color:var(--texto-suave);">Ingresa con tu correo y contraseña.</p>
+
+      <div class="field">
+        <label for="login-email">Correo</label>
+        <input type="email" id="login-email" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="login-password">Contraseña</label>
+        <input type="password" id="login-password" autocomplete="current-password" required />
+      </div>
+
+      <button type="submit" class="btn btn-primary">Ingresar</button>
+
+      <div class="auth-links">
+        <button type="button" class="btn-link" data-goto="reset">¿Olvidaste tu contraseña?</button>
+        <button type="button" class="btn-link" data-goto="register">¿Primera vez? Crea tu contraseña</button>
+      </div>
+
+      <div class="auth-divider">o</div>
+      <button type="button" id="btn-google" class="btn btn-google">
+        <span>Ingresar con Google</span>
+      </button>
+    </form>
+
+    <!-- ---- Registro (primera vez) ---- -->
+    <form id="form-register" class="auth-form">
+      <h3 style="margin:0 0 4px;font-size:0.95rem;color:var(--azul-noche);">Primera vez</h3>
+      <p style="margin:0 0 16px;font-size:0.78rem;color:var(--texto-suave);">Crea tu cuenta con tu nombre, correo y contraseña.</p>
+
+      <div class="field">
+        <label for="reg-nombre">Nombre completo</label>
+        <input type="text" id="reg-nombre" autocomplete="name" required />
+      </div>
+      <div class="field">
+        <label for="reg-email">Correo</label>
+        <input type="email" id="reg-email" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="reg-password">Crea tu contraseña</label>
+        <input type="password" id="reg-password" autocomplete="new-password" minlength="6" required />
+      </div>
+      <div class="field">
+        <label for="reg-password-confirm">Escríbela otra vez</label>
+        <input type="password" id="reg-password-confirm" autocomplete="new-password" minlength="6" required />
+      </div>
+
+      <div class="consent-check">
+        <input type="checkbox" id="reg-consent" required style="margin-top:2px;" />
+        <label for="reg-consent">
+          He leído y acepto la
+          <button type="button" id="btn-ver-politica" class="btn-link" style="padding:0;display:inline;">política de tratamiento de datos personales</button>.
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-primary">Crear mi cuenta</button>
+      <button type="button" class="btn-link" data-goto="login" style="margin-top:10px;">Volver al ingreso</button>
+    </form>
+
+    <!-- ---- Recuperar contraseña ---- -->
+    <form id="form-reset" class="auth-form">
+      <h3 style="margin:0 0 4px;font-size:0.95rem;color:var(--azul-noche);">Recuperar contraseña</h3>
+      <p style="margin:0 0 16px;font-size:0.78rem;color:var(--texto-suave);">Te enviaremos un enlace a tu correo registrado.</p>
+      <div class="field">
+        <label for="reset-email">Correo</label>
+        <input type="email" id="reset-email" required />
+      </div>
+      <button type="submit" class="btn btn-primary">Enviar enlace</button>
+      <button type="button" class="btn-link" data-goto="login" style="margin-top:10px;">Volver al ingreso</button>
+    </form>
+
+    <!-- ---- Política de datos (colapsable) ---- -->
+    <div id="politica-box" class="consent-box" style="display:none;">
+      <strong>Política de tratamiento de datos personales</strong><br/><br/>
+      <strong>Finalidad:</strong> los datos suministrados se usan exclusivamente para la gestión comercial,
+      administrativa y de comisiones dentro de inmobiliariadelmet.<br/><br/>
+      <strong>Responsable:</strong> inmobiliariadelmet.<br/><br/>
+      <strong>Derechos del titular:</strong> conocer, actualizar, rectificar y solicitar la eliminación de sus
+      datos personales, conforme a la Ley 1581 de 2012 y normas concordantes de Colombia.
+    </div>
+
+    <!-- ---- Acceso restringido ---- -->
+    <div id="restricted-view" style="display:none;">
+      <div class="restricted-box">
+        <div class="icon">🔒</div>
+        <h3 style="margin:0 0 6px;color:var(--azul-noche);">Acceso restringido</h3>
+        <p style="color:var(--texto-suave);font-size:0.85rem;">Tu cuenta no tiene acceso al sistema. Contacta a tu Director para que la autorice.</p>
+        <button id="btn-restricted-logout" class="btn btn-secondary btn-sm" style="margin-top:10px;">Volver al ingreso</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ============ APP PRINCIPAL ============ -->
+<div id="app-screen">
+  <header class="app-header">
+    <div class="brand">
+      <div class="logo-mark">IM</div>
+      <span>inmobiliariadelmet</span>
+    </div>
+    <div class="user-chip">
+      <span id="user-email-label"></span>
+      <button id="btn-logout">Salir</button>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <nav class="app-nav" id="app-nav">
+      <button data-module="inicio" class="active">Inicio</button>
+
+      <div class="nav-group-label">Comercial</div>
+      <button data-module="agenda">Mi Agenda</button>
+      <button data-module="cotizador">Cotizador</button>
+      <button data-module="prospectos">Prospectos CRM</button>
+      <button data-module="visitas">Visitas</button>
+      <button data-module="ranking-visitas">Ranking Visitas</button>
+
+      <div class="nav-group-label">Gestión</div>
+      <button data-module="asistencia">Asistencia</button>
+      <button data-module="pqrs">PQRS</button>
+      <button data-module="bitacora">Bitácora</button>
+
+      <div class="nav-group-label">Desarrollo</div>
+      <button data-module="acompanamientos">Acompañamientos</button>
+      <button data-module="mapa-suenos">Mapa de Sueños</button>
+      <button data-module="mi-equipo">Mi Equipo</button>
+
+      <div class="nav-group-label">Estrategia</div>
+      <button data-module="metricas">Métricas</button>
+      <button data-module="panel-estrategico">Panel Estratégico</button>
+
+      <div class="nav-group-label">&nbsp;</div>
+      <button data-module="perfil">Mi perfil</button>
+    </nav>
+
+    <main class="app-main" id="app-main">
+      <!-- El contenido de cada módulo se inyecta aquí desde js/app.js -->
+    </main>
+  </div>
+</div>
+
+<!-- Firebase SDK (modular, v10) -->
+<script type="module" src="js/firebase-config.js"></script>
+<script type="module" src="js/auth.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
