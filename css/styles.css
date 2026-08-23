@@ -349,7 +349,74 @@ tr:last-child td { border-bottom: none; }
 .form-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
 .form-row .field { flex: 1; min-width: 160px; margin-bottom: 0; }
 
-.btn-sm { width: auto; padding: 7px 14px; font-size: 0.82rem; }
+.btn-sm { width: auto; padding: 7px 14px; font-size: 0.82rem; margin-right: 8px; }
+
+/* ---------- Pestañas secundarias (Agenda, etc.) ---------- */
+.subtabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--gris-borde);
+  margin-bottom: 18px;
+}
+.subtabs button {
+  background: none;
+  border: none;
+  padding: 9px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.subtabs button.active {
+  color: var(--azul-noche);
+  border-bottom-color: var(--dorado);
+}
+.subtabs button:hover { color: var(--azul-noche); }
+
+/* ---------- Agenda: layout de dos columnas ---------- */
+.agenda-layout {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .agenda-layout { grid-template-columns: 1fr; }
+}
+
+.agenda-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--gris-borde);
+}
+.agenda-item:last-child { border-bottom: none; }
+.agenda-item-cuerpo { flex: 1; }
+.agenda-item-acciones { display: flex; flex-direction: column; gap: 2px; align-items: flex-end; }
+
+.btn-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--gris-borde);
+  background: white;
+  color: white;
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.btn-check.hecho { background: var(--exito); border-color: var(--exito); }
+
+.agenda-invitacion {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--gris-borde);
+}
+.agenda-invitacion:last-child { border-bottom: none; }
 
 .empty-state { color: var(--texto-suave); font-size: 0.88rem; padding: 20px 0; text-align: center; }
 
