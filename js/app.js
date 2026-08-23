@@ -77,6 +77,74 @@ function fmtFechaCorta(iso) {
   return `${d}-${m}-${y}`;
 }
 
+// Lunes-domingo de la semana que contiene `hoy`, y primer-último día
+// del mes de `hoy` — como strings ISO (comparan bien como texto).
+function rangoSemana(hoy) {
+  const dia = hoy.getDay(); // 0 = domingo
+  const diffLunes = dia === 0 ? -6 : 1 - dia;
+  const lunes = new Date(hoy);
+  lunes.setDate(hoy.getDate() + diffLunes);
+  const domingo = new Date(lunes);
+  domingo.setDate(lunes.getDate() + 6);
+  return { desde: toISODate(lunes), hasta: toISODate(domingo) };
+}
+function rangoMes(hoy) {
+  const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  const hasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+  return { desde: toISODate(desde), hasta: toISODate(hasta) };
+}
+
+// ---------- Catálogos del módulo de Agenda ----------
+const TIPOS_AGENDA = [
+  { value: "Llamada", icono: "📞" },
+  { value: "Visita", icono: "🏡" },
+  { value: "Reunión", icono: "🤝" },
+  { value: "Recordatorio", icono: "🔔" },
+];
+const DURACIONES_AGENDA = [
+  { value: "30", label: "30 minutos" },
+  { value: "60", label: "1 hora" },
+  { value: "90", label: "1 hora y media" },
+  { value: "120", label: "2 horas" },
+  { value: "0", label: "Todo el día" },
+];
+function iconoTipoAgenda(tipo) {
+  return (TIPOS_AGENDA.find((t) => t.value === tipo) || {}).icono || "•";
+}
+function generarICS(filas) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const lineas = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//inmobiliariadelmet//Agenda//ES"];
+  filas.forEach((f) => {
+    if (!f.fecha) return;
+    const [y, m, d] = f.fecha.split("-").map(Number);
+    const [hh, mm] = (f.hora || "09:00").split(":").map(Number);
+    const inicio = new Date(y, m - 1, d, hh || 9, mm || 0);
+    const dur = Number(f.duracionMin) || 60;
+    const fin = new Date(inicio.getTime() + dur * 60000);
+    const fmt = (dt) => `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}T${pad(dt.getHours())}${pad(dt.getMinutes())}00`;
+    lineas.push("BEGIN:VEVENT");
+    lineas.push(`UID:${f.id}@inmobiliariadelmet`);
+    lineas.push(`SUMMARY:${(f.titulo || "Sin título").replace(/\r?\n/g, " ")}`);
+    lineas.push(`DTSTART:${fmt(inicio)}`);
+    lineas.push(`DTEND:${fmt(fin)}`);
+    if (f.texto) lineas.push(`DESCRIPTION:${String(f.texto).replace(/\r?\n/g, "\\n")}`);
+    lineas.push("END:VEVENT");
+  });
+  lineas.push("END:VCALENDAR");
+  return lineas.join("\r\n");
+}
+function descargarICS(filas, nombreArchivo) {
+  const blob = new Blob([generarICS(filas)], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nombreArchivo;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ---------- Catálogos del módulo de Visitas ----------
 const ESTADOS_VISITA = [
   { value: "programada", label: "Programada", color: "#e0a600" },
@@ -272,37 +340,84 @@ function campoHtml(c) {
 //  refuerza también firestore.rules, no solo esta pantalla.
 // ============================================================
 
+const TABS_AGENDA = [
+  { key: "hoy", label: "Hoy" },
+  { key: "semana", label: "Semana" },
+  { key: "mes", label: "Mes" },
+  { key: "vencimientos", label: "Vencimientos" },
+  { key: "rama", label: "Mi rama" },
+];
+
 async function renderAgenda(container) {
   const verEquipo = esLider();
+  const miEmail = sesion.user.email;
+  let tabActiva = "hoy";
 
   container.innerHTML = `
     <h2 class="module-title">Mi Agenda</h2>
     <p class="module-subtitle">Citas y pendientes del día a día.</p>
 
-    <div class="card">
-      <h3>Nuevo registro</h3>
-      <form id="form-agenda">
-        <div class="form-row">
-          <div class="field">
-            <label>Actividad</label>
-            <input type="text" name="titulo" required />
-          </div>
-          <div class="field">
-            <label>Fecha</label>
-            <input type="date" name="fecha" required />
-          </div>
-          <div class="field" style="flex-basis:100%;">
-            <label>Detalle</label>
-            <textarea name="texto" rows="2" style="width:100%;padding:10px;border:1px solid var(--gris-borde);border-radius:8px;"></textarea>
-          </div>
-        </div>
-        <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
-      </form>
+    <div class="subtabs" id="agenda-tabs">
+      ${TABS_AGENDA.map((t, i) => `<button type="button" data-tab="${t.key}" class="${i === 0 ? "active" : ""}">${t.label}</button>`).join("")}
     </div>
 
-    <div class="card">
-      <h3>Mis registros</h3>
-      <div id="agenda-wrap"><p class="empty-state">Cargando…</p></div>
+    <div class="agenda-layout">
+      <div>
+        <div class="card">
+          <div id="agenda-lista-titulo" style="font-weight:600;color:var(--azul-noche);margin-bottom:10px;">Hoy</div>
+          <div id="agenda-lista"><p class="empty-state">Cargando…</p></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card" id="agenda-invitaciones-card" style="display:none;">
+          <h3>Invitaciones pendientes</h3>
+          <div id="agenda-invitaciones"></div>
+        </div>
+
+        <div class="card">
+          <h3 id="agenda-form-titulo">Programar algo</h3>
+          <form id="form-agenda">
+            <input type="hidden" name="idEdicion" value="" />
+            <div class="field">
+              <label>Qué es</label>
+              <select name="tipo">${TIPOS_AGENDA.map((t) => `<option value="${t.value}">${t.icono} ${t.value}</option>`).join("")}</select>
+            </div>
+            <div class="field">
+              <label>Título</label>
+              <input type="text" name="titulo" placeholder="Llamar a Juan Pérez" required />
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label>Día</label>
+                <input type="date" name="fecha" required />
+              </div>
+              <div class="field">
+                <label>Hora</label>
+                <input type="time" name="hora" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label>Cuánto dura</label>
+                <select name="duracion">${DURACIONES_AGENDA.map((d) => `<option value="${d.value}" ${d.value === "60" ? "selected" : ""}>${d.label}</option>`).join("")}</select>
+              </div>
+              <div class="field">
+                <label>Invitar a un compañero</label>
+                <select name="invitado" id="select-invitado"><option value="">Nadie más</option></select>
+                <p style="font-size:0.72rem;color:var(--texto-suave);margin:4px 0 0;">Le llega la propuesta. Entra a su agenda solo si acepta.</p>
+              </div>
+            </div>
+            <div class="field">
+              <label>Detalle</label>
+              <textarea name="texto" rows="3" style="width:100%;padding:10px;border:1px solid var(--gris-borde);border-radius:8px;" placeholder="Lo que necesites recordar."></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm">Programar</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-bajar-calendario">Bajar mi calendario</button>
+            <button type="button" class="btn-link" id="btn-cancelar-agenda" style="display:none;">Cancelar edición</button>
+          </form>
+        </div>
+      </div>
     </div>
 
     ${
@@ -317,71 +432,296 @@ async function renderAgenda(container) {
   `;
 
   const form = container.querySelector("#form-agenda");
+  const inputId = form.querySelector('[name="idEdicion"]');
+  const selectInvitado = container.querySelector("#select-invitado");
+  const btnCancelar = container.querySelector("#btn-cancelar-agenda");
+
+  function limpiarFormulario() {
+    form.reset();
+    inputId.value = "";
+    selectInvitado.disabled = false;
+    container.querySelector("#agenda-form-titulo").textContent = "Programar algo";
+    btnCancelar.style.display = "none";
+  }
+
+  btnCancelar.addEventListener("click", limpiarFormulario);
+
+  // Compañeros activos para el selector "Invitar a" (requiere que
+  // cualquier usuario autorizado pueda listar usuariosAutorizados —
+  // solo se usan nombre/correo/rol, nunca datos de clientes).
+  async function cargarInvitados() {
+    try {
+      const snap = await getDocs(query(collection(db, "usuariosAutorizados"), where("activo", "==", true)));
+      const opciones = snap.docs
+        .map((d) => ({ correo: d.id, ...d.data() }))
+        .filter((u) => u.correo !== miEmail)
+        .sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+      selectInvitado.innerHTML =
+        `<option value="">Nadie más</option>` +
+        opciones.map((u) => `<option value="${u.correo}">${u.nombre || u.correo}</option>`).join("");
+    } catch (err) {
+      selectInvitado.innerHTML = `<option value="">Nadie más</option>`;
+    }
+  }
+
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
+    const tipo = fd.get("tipo");
     const titulo = fd.get("titulo");
     const fecha = fd.get("fecha");
+    const hora = fd.get("hora") || "";
+    const duracionMin = fd.get("duracion");
     const texto = fd.get("texto") || "";
+    const invitadoEmail = fd.get("invitado") || "";
     const autor = sesion.perfil?.nombre || sesion.user.email;
-    const autorEmail = sesion.user.email;
+    const autorEmail = miEmail;
     const autorRol = sesion.perfil?.rol || "";
-    const creado = serverTimestamp();
+    const idExistente = inputId.value;
 
-    // Un solo ID compartido entre el registro completo y su resumen,
-    // para poder borrar ambos juntos.
-    const ref = doc(collection(db, "agenda"));
-    await setDoc(ref, { titulo, fecha, texto, autor, autorEmail, creado });
-    await setDoc(doc(db, "agendaResumen", ref.id), { titulo, fecha, autor, autorEmail, autorRol, creado });
+    const datos = { tipo, titulo, fecha, hora, duracionMin, texto, autor, autorEmail, completado: false };
 
-    form.reset();
-    cargarMiAgenda();
+    if (idExistente) {
+      await setDoc(doc(db, "agenda", idExistente), datos, { merge: true });
+      await setDoc(doc(db, "agendaResumen", idExistente), { titulo, fecha, autor, autorEmail, autorRol }, { merge: true });
+    } else {
+      const creado = serverTimestamp();
+      const ref = doc(collection(db, "agenda"));
+      await setDoc(ref, { ...datos, creado });
+      await setDoc(doc(db, "agendaResumen", ref.id), { titulo, fecha, autor, autorEmail, autorRol, creado });
+
+      if (invitadoEmail) {
+        const invitadoNombre = selectInvitado.options[selectInvitado.selectedIndex]?.textContent || invitadoEmail;
+        await addDoc(collection(db, "agendaInvitaciones"), {
+          deEmail: autorEmail,
+          deNombre: autor,
+          paraEmail: invitadoEmail,
+          paraNombre: invitadoNombre,
+          tipo,
+          titulo,
+          fecha,
+          hora,
+          duracionMin,
+          texto,
+          estado: "pendiente",
+          creado: serverTimestamp(),
+        });
+      }
+    }
+
+    limpiarFormulario();
+    cargarLista();
     if (verEquipo) cargarAgendaEquipo();
   });
 
-  async function cargarMiAgenda() {
-    const wrap = container.querySelector("#agenda-wrap");
+  container.querySelector("#btn-bajar-calendario").addEventListener("click", async () => {
+    const snap = await getDocs(query(collection(db, "agenda"), where("autorEmail", "==", miEmail)));
+    const filas = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (filas.length === 0) {
+      alert("Todavía no tienes nada programado para descargar.");
+      return;
+    }
+    descargarICS(filas, "mi-agenda-inmobiliariadelmet.ics");
+  });
+
+  function editarFila(f) {
+    inputId.value = f.id;
+    form.querySelector('[name="tipo"]').value = f.tipo || "Llamada";
+    form.querySelector('[name="titulo"]').value = f.titulo || "";
+    form.querySelector('[name="fecha"]').value = f.fecha || "";
+    form.querySelector('[name="hora"]').value = f.hora || "";
+    form.querySelector('[name="duracion"]').value = f.duracionMin || "60";
+    form.querySelector('[name="texto"]').value = f.texto || "";
+    selectInvitado.value = "";
+    selectInvitado.disabled = true;
+    container.querySelector("#agenda-form-titulo").textContent = "Editando registro";
+    btnCancelar.style.display = "inline";
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function marcarHecho(f) {
+    await setDoc(doc(db, "agenda", f.id), { completado: !f.completado }, { merge: true });
+    cargarLista();
+  }
+
+  async function eliminarFila(id) {
+    if (!confirm("¿Eliminar este registro?")) return;
+    await deleteDoc(doc(db, "agenda", id));
+    await deleteDoc(doc(db, "agendaResumen", id)).catch(() => {});
+    cargarLista();
+    if (verEquipo) cargarAgendaEquipo();
+  }
+
+  function filaHtml(f) {
+    return `
+      <div class="agenda-item" data-id="${f.id}">
+        <div class="agenda-item-check">
+          <button type="button" class="btn-check ${f.completado ? "hecho" : ""}" data-accion="hecho" title="Marcar hecho">${f.completado ? "✓" : ""}</button>
+        </div>
+        <div class="agenda-item-cuerpo">
+          <div style="font-weight:600;${f.completado ? "text-decoration:line-through;color:var(--texto-suave);" : ""}">${iconoTipoAgenda(f.tipo)} ${f.titulo || "—"}</div>
+          <div style="font-size:0.78rem;color:var(--texto-suave);">${fmtFechaCorta(f.fecha)}${f.hora ? " · " + f.hora : ""}</div>
+          ${f.texto ? `<div style="font-size:0.82rem;margin-top:4px;">${f.texto}</div>` : ""}
+        </div>
+        <div class="agenda-item-acciones">
+          <button type="button" class="btn-link" data-accion="editar">Editar</button>
+          <button type="button" class="btn-link" data-accion="eliminar">Eliminar</button>
+        </div>
+      </div>`;
+  }
+
+  function engancharAcciones(wrap, filasPorId) {
+    wrap.querySelectorAll(".agenda-item").forEach((el) => {
+      const f = filasPorId[el.dataset.id];
+      if (!f) return;
+      el.querySelector('[data-accion="hecho"]').addEventListener("click", () => marcarHecho(f));
+      el.querySelector('[data-accion="editar"]').addEventListener("click", () => editarFila(f));
+      el.querySelector('[data-accion="eliminar"]').addEventListener("click", () => eliminarFila(f.id));
+    });
+  }
+
+  async function cargarLista() {
+    const wrap = container.querySelector("#agenda-lista");
+    const tituloTab = container.querySelector("#agenda-lista-titulo");
     wrap.innerHTML = `<p class="empty-state">Cargando…</p>`;
+
+    if (tabActiva === "rama") {
+      tituloTab.textContent = "Mi rama — a quién invitaste y quién te invitó";
+      try {
+        const [snapDe, snapPara] = await Promise.all([
+          getDocs(query(collection(db, "agendaInvitaciones"), where("deEmail", "==", miEmail))),
+          getDocs(query(collection(db, "agendaInvitaciones"), where("paraEmail", "==", miEmail))),
+        ]);
+        const filas = [...snapDe.docs, ...snapPara.docs].map((d) => ({ id: d.id, ...d.data() }));
+        filas.sort((a, b) => (b.creado?.toMillis?.() || 0) - (a.creado?.toMillis?.() || 0));
+        if (filas.length === 0) {
+          wrap.innerHTML = `<p class="empty-state">Todavía no has invitado ni te han invitado a nada.</p>`;
+          return;
+        }
+        const estadoTxt = { pendiente: "Pendiente", aceptada: "Aceptada", rechazada: "Rechazada" };
+        wrap.innerHTML = `
+          <table>
+            <thead><tr><th>Con quién</th><th>Actividad</th><th>Fecha</th><th>Estado</th></tr></thead>
+            <tbody>
+              ${filas
+                .map((f) => {
+                  const esMia = f.deEmail === miEmail;
+                  const contraparte = esMia ? f.paraNombre || f.paraEmail : f.deNombre || f.deEmail;
+                  return `<tr><td>${contraparte} ${esMia ? "(la propusiste tú)" : "(te invitó)"}</td><td>${iconoTipoAgenda(f.tipo)} ${f.titulo || "—"}</td><td>${fmtFechaCorta(f.fecha)}</td><td>${estadoTxt[f.estado] || f.estado}</td></tr>`;
+                })
+                .join("")}
+            </tbody>
+          </table>`;
+      } catch (err) {
+        wrap.innerHTML = `<p class="empty-state">No se pudo cargar (${err.message}).</p>`;
+      }
+      return;
+    }
+
     try {
-      const q = query(collection(db, "agenda"), where("autorEmail", "==", sesion.user.email));
-      const snap = await getDocs(q);
-      const filas = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      filas.sort((a, b) => (a.fecha || "").localeCompare(b.fecha || ""));
+      const snap = await getDocs(query(collection(db, "agenda"), where("autorEmail", "==", miEmail)));
+      let filas = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const hoy = new Date();
+      const hoyISO = toISODate(hoy);
+
+      if (tabActiva === "hoy") {
+        tituloTab.textContent = hoy.toLocaleDateString("es-CO", { weekday: "long", day: "2-digit", month: "long" });
+        filas = filas.filter((f) => f.fecha === hoyISO);
+      } else if (tabActiva === "semana") {
+        const r = rangoSemana(hoy);
+        tituloTab.textContent = `Semana del ${fmtFechaCorta(r.desde)} al ${fmtFechaCorta(r.hasta)}`;
+        filas = filas.filter((f) => f.fecha >= r.desde && f.fecha <= r.hasta);
+      } else if (tabActiva === "mes") {
+        const r = rangoMes(hoy);
+        tituloTab.textContent = hoy.toLocaleDateString("es-CO", { month: "long", year: "numeric" });
+        filas = filas.filter((f) => f.fecha >= r.desde && f.fecha <= r.hasta);
+      } else if (tabActiva === "vencimientos") {
+        tituloTab.textContent = "Pendientes de hoy hacia atrás, sin marcar como hechos";
+        filas = filas.filter((f) => f.fecha && f.fecha <= hoyISO && !f.completado);
+      }
+
+      filas.sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "") || (a.hora || "").localeCompare(b.hora || ""));
 
       if (filas.length === 0) {
-        wrap.innerHTML = `<p class="empty-state">Todavía no hay registros. Agrega el primero arriba.</p>`;
+        wrap.innerHTML =
+          tabActiva === "hoy"
+            ? `<p class="empty-state">Hoy no tienes nada programado. Puedes agendar una llamada o una visita ahí al lado.</p>`
+            : `<p class="empty-state">No hay nada aquí por ahora.</p>`;
         return;
       }
 
-      wrap.innerHTML = `
-        <table>
-          <thead><tr><th>Fecha</th><th>Actividad</th><th>Detalle</th><th></th></tr></thead>
-          <tbody>
-            ${filas
-              .map(
-                (f) => `
-              <tr data-id="${f.id}">
-                <td>${f.fecha || "—"}</td>
-                <td>${f.titulo || "—"}</td>
-                <td>${f.texto || "—"}</td>
-                <td><button class="btn-link btn-eliminar" data-id="${f.id}">Eliminar</button></td>
-              </tr>`
-              )
-              .join("")}
-          </tbody>
-        </table>`;
+      const filasPorId = Object.fromEntries(filas.map((f) => [f.id, f]));
+      wrap.innerHTML = filas.map(filaHtml).join("");
+      engancharAcciones(wrap, filasPorId);
+    } catch (err) {
+      wrap.innerHTML = `<p class="empty-state">No se pudo cargar (${err.message}).</p>`;
+    }
+  }
 
-      wrap.querySelectorAll(".btn-eliminar").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          if (!confirm("¿Eliminar este registro?")) return;
-          await deleteDoc(doc(db, "agenda", btn.dataset.id));
-          await deleteDoc(doc(db, "agendaResumen", btn.dataset.id)).catch(() => {});
-          cargarMiAgenda();
-          if (verEquipo) cargarAgendaEquipo();
+  async function cargarInvitacionesPendientes() {
+    const card = container.querySelector("#agenda-invitaciones-card");
+    const wrap = container.querySelector("#agenda-invitaciones");
+    try {
+      const snap = await getDocs(
+        query(collection(db, "agendaInvitaciones"), where("paraEmail", "==", miEmail), where("estado", "==", "pendiente"))
+      );
+      const filas = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      if (filas.length === 0) {
+        card.style.display = "none";
+        return;
+      }
+      card.style.display = "block";
+      wrap.innerHTML = filas
+        .map(
+          (f) => `
+        <div class="agenda-invitacion" data-id="${f.id}">
+          <div style="font-size:0.85rem;">
+            <strong>${f.deNombre || f.deEmail}</strong> te invitó: ${iconoTipoAgenda(f.tipo)} ${f.titulo || "—"}<br/>
+            <span style="color:var(--texto-suave);">${fmtFechaCorta(f.fecha)}${f.hora ? " · " + f.hora : ""}</span>
+          </div>
+          <div style="margin-top:6px;">
+            <button type="button" class="btn btn-primary btn-sm" data-accion="aceptar" style="width:auto;padding:4px 12px;">Aceptar</button>
+            <button type="button" class="btn-link" data-accion="rechazar">Rechazar</button>
+          </div>
+        </div>`
+        )
+        .join("");
+
+      wrap.querySelectorAll(".agenda-invitacion").forEach((el) => {
+        const f = filas.find((x) => x.id === el.dataset.id);
+        el.querySelector('[data-accion="aceptar"]').addEventListener("click", async () => {
+          const ref = doc(collection(db, "agenda"));
+          await setDoc(ref, {
+            tipo: f.tipo,
+            titulo: f.titulo,
+            fecha: f.fecha,
+            hora: f.hora,
+            duracionMin: f.duracionMin,
+            texto: f.texto || "",
+            autor: sesion.perfil?.nombre || miEmail,
+            autorEmail: miEmail,
+            completado: false,
+            creado: serverTimestamp(),
+          });
+          await setDoc(doc(db, "agendaResumen", ref.id), {
+            titulo: f.titulo,
+            fecha: f.fecha,
+            autor: sesion.perfil?.nombre || miEmail,
+            autorEmail: miEmail,
+            autorRol: sesion.perfil?.rol || "",
+            creado: serverTimestamp(),
+          });
+          await setDoc(doc(db, "agendaInvitaciones", f.id), { estado: "aceptada" }, { merge: true });
+          cargarInvitacionesPendientes();
+          cargarLista();
+        });
+        el.querySelector('[data-accion="rechazar"]').addEventListener("click", async () => {
+          await setDoc(doc(db, "agendaInvitaciones", f.id), { estado: "rechazada" }, { merge: true });
+          cargarInvitacionesPendientes();
         });
       });
     } catch (err) {
-      wrap.innerHTML = `<p class="empty-state">No se pudo cargar (${err.message}).</p>`;
+      card.style.display = "none";
     }
   }
 
@@ -416,7 +756,17 @@ async function renderAgenda(container) {
     }
   }
 
-  cargarMiAgenda();
+  container.querySelectorAll("#agenda-tabs button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      tabActiva = btn.dataset.tab;
+      container.querySelectorAll("#agenda-tabs button").forEach((b) => b.classList.toggle("active", b === btn));
+      cargarLista();
+    });
+  });
+
+  cargarInvitados();
+  cargarLista();
+  cargarInvitacionesPendientes();
   if (verEquipo) cargarAgendaEquipo();
 }
 
