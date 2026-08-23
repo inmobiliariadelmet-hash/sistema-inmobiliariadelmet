@@ -54,6 +54,17 @@ ya tiene tus datos reales — no necesitas volver a copiarlos.
   únicamente esas cifras, nunca los datos del cliente — así que aunque alguien
   intentara "hackear" la app, es imposible que reciba esa información porque nunca se
   guarda ahí.
+- **Mi Agenda** ahora tiene pestañas (Hoy, Semana, Mes, Vencimientos, Mi rama), permite
+  marcar cada cosa como hecha, y descargar tu calendario en un archivo `.ics` que abre en
+  Google Calendar, Outlook o el calendario del celular. También puedes **invitar a un
+  compañero** a una actividad: le llega como propuesta y solo aparece en SU agenda si él
+  la acepta — mientras esté pendiente, nadie más (ni tú como Director) puede verla, salvo
+  quien la envió y quien la recibió. La pestaña "Mi rama" muestra a quién has invitado y
+  quién te ha invitado a ti.
+- Para que el selector de "invitar a un compañero" funcione, **cualquier usuario
+  autorizado puede ver el directorio** (nombre, correo, nivel) de todo el equipo — antes
+  solo tú podías. Sigue sin exponer ningún dato de negocio (clientes, visitas, etc.), solo
+  el perfil básico de cada persona.
 - **Mi Equipo es visible solo para ti** (el Director) — un ejecutivo ve un aviso de
   "módulo solo para el Director" si entra ahí.
 - **Métricas** le muestra a cada ejecutivo sus propios números, y a ti el resumen de todo
