@@ -650,7 +650,7 @@ const PROY=[['BUGANVILES CAMPESTRE',C1,N1],['QUINTAS DEL ESTE',C1,N1],['BOSQUES 
 const dec=s=>parseFloat(String(s).replace(/\./g,'').replace(',','.'))||0;
 const pct=s=>parseFloat(String(s).replace(',','.'))||0;
 function adj(t,v,base){return t==='PORCENTAJE'?Math.max(0,Math.round(base*pct(v)/100)):t==='VALOR FIJO'?Math.max(0,num(v)):0}
-function adjLbl(n,t,v){return n+(t==='PORCENTAJE'?' '+pct(v)+'%':'')}
+function adjLbl(n,t,v){return n+(t==='PORCENTAJE'?' '+String(pct(v)).replace('.',',')+'%':'')}
 let cotNum='';
 function calc(){
   const err=[];
@@ -938,6 +938,17 @@ $('copy').addEventListener('click',()=>{
 $('nueva').addEventListener('click',()=>{
   ['clNombre','clCedula','clExp','clCel','clCorreo','clDir','clOcu','clCivil','obs'].forEach(id=>$(id).value='');$('clAut').checked=false;
   const d=today();$('fecha').value=iso(d);cotNum=newNum(d);render();say('Nueva cotización '+cotNum+'.');$('clNombre').focus();
+});
+function liveFmt(el){
+  let p=el.value.length;try{p=el.selectionStart}catch(_){}
+  const d=el.value.slice(0,p).replace(/\D/g,'').length,v=el.value.replace(/\D/g,''),f=v?fmt(parseInt(v,10)):'';
+  el.value=f;let i=0,k=0;while(i<f.length&&k<d){if(/\d/.test(f[i]))k++;i++}
+  try{el.setSelectionRange(i,i)}catch(_){}
+}
+document.querySelectorAll('#f .money').forEach(el=>el.addEventListener('input',()=>liveFmt(el)));
+[['esqT','esqV'],['pluT','pluV'],['desT','desV']].forEach(([t,v])=>{
+  $(v).addEventListener('input',()=>{if($(t).value==='VALOR FIJO')liveFmt($(v))});
+  $(t).addEventListener('change',()=>{if($(t).value==='VALOR FIJO')$(v).value=fmt(num($(v).value));else if(/\.\d{3}/.test($(v).value))$(v).value='0'});
 });
 document.querySelectorAll('#f .money').forEach(el=>el.addEventListener('blur',()=>{el.value=fmt(num(el.value))}));
 $('tipo').addEventListener('change',()=>{$('nM').value=$('tipo').value==='con'?1:33});
