@@ -48,7 +48,11 @@ textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(
 .calc{display:grid;gap:4px;background:var(--bg);border-radius:8px;padding:10px 12px;font-variant-numeric:tabular-nums;font-size:13.5px}
 .calc div{display:flex;justify-content:space-between;gap:12px}
 .calc .t{font-weight:700;color:var(--brand);font-size:15px;border-top:1px solid var(--line);padding-top:6px;margin-top:2px}
-.brk{font-size:12px;color:var(--paper-muted)}
+.brk{font-size:12.5px;color:var(--paper-muted);display:grid;gap:4px}
+.brk .po{font-size:17px;font-weight:700;color:var(--paper-fg)}
+.brk .red{color:#b3261e;font-size:14px;font-weight:600}
+.brk .red b{font-weight:700;margin-left:10px;white-space:nowrap}
+.calc .neg{color:var(--bad);font-weight:600}
 .obs{background:var(--paper-soft);border-radius:6px;padding:12px 14px;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere}
 .hint{font-size:12.5px;color:var(--muted);margin:0}
 .side{display:grid;gap:12px;min-width:0}
@@ -134,6 +138,7 @@ td.n,th.n{text-align:right}
         <label>Ocupación<input id="clOcu"></label>
         <label>Estado civil<input id="clCivil"></label>
       </div>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--fg);font-size:14px"><input type="checkbox" id="clAut" style="width:auto"> El cliente autoriza que lo contacten con ofertas</label>
     </fieldset>
 
     <fieldset><legend>Proyecto y parcela</legend>
@@ -158,13 +163,14 @@ td.n,th.n{text-align:right}
         <label>Otros<select id="pluT"><option>NO</option><option>PORCENTAJE</option><option>VALOR FIJO</option></select></label>
         <label>% o valor<input id="pluV" inputmode="decimal" value="0" style="text-align:right"></label><span></span>
       </div>
+      <label style="display:flex;gap:8px;align-items:center;color:var(--fg);font-size:14px"><input type="checkbox" id="aplOf" style="width:auto"> Aplicar Descuento promocional VIP</label>
+      <p class="hint" id="vipHint"></p>
       <div class="adj">
         <label>Descuento promocional<select id="desT"><option>NO</option><option>PORCENTAJE</option><option>VALOR FIJO</option></select></label>
         <label>% o valor<input id="desV" inputmode="decimal" value="0" style="text-align:right"></label><span></span>
       </div>
-      <label style="display:flex;gap:8px;align-items:center;color:var(--fg);font-size:14px"><input type="checkbox" id="aplOf" checked style="width:auto"> Aplicar descuento oficial por plazo</label>
       <div class="calc" id="calcBox"></div>
-      <p class="hint">Descuento oficial (opcional, se quita desmarcando la casilla): contado 12 % · hasta 6 meses 8 % · hasta 12 meses 4 %. Recargo por financiación (siempre se aplica): hasta 31 meses +3 % · hasta 37 meses +8 %. De 13 a 25 meses no hay ajuste. El descuento promocional del mes es aparte y también opcional.</p>
+      <p class="hint">Descuento promocional VIP (opcional): contado 12 % · hasta 6 meses 8 % · hasta 13 meses 4 %. Descuento promocional del mes (opcional): se aplica sobre el valor que queda después del VIP. Recargo por financiación (siempre): hasta 31 meses +3 % · hasta 37 meses +8 %.</p>
     </fieldset>
 
     <fieldset><legend>Plan de pago</legend>
@@ -187,6 +193,7 @@ td.n,th.n{text-align:right}
         <label>Valor de cada una<input id="vE" class="money" inputmode="numeric" value="4.800.000"></label>
         <label>Cada cuántos meses<input id="pE" type="number" min="1" max="60" value="7"></label>
       </div>
+      <p class="hint" id="maxE"></p>
       <label id="lblFinal">Última cuota antes de escritura (0 si no hay)<input id="final" class="money" inputmode="numeric" value="4.885.884"></label>
       <p class="hint">Sin intereses. En financiado y permuta el plazo (mensuales + extraordinarias + última cuota) va de 3 a 37 meses. La cuota se calcula sola: valor final − cuota inicial − permuta − extraordinarias − última cuota, dividido entre el número de cuotas mensuales. En el mes de una extraordinaria no se cobra cuota mensual.</p>
       <label>Observaciones<textarea id="obs" placeholder="Ej.: negocio cotizado en lanzamiento, descuento financiado hasta 37 meses"></textarea></label>
@@ -204,6 +211,7 @@ td.n,th.n{text-align:right}
     <div class="actions">
       <button class="primary" id="pdf" type="button">Descargar PDF</button>
       <button id="copy" type="button">Copiar resumen para WhatsApp</button>
+      <button id="sepBtn" type="button" hidden>Registrar separación</button>
       <button id="nueva" type="button">Nueva cotización</button>
       <span class="msg" id="msg" role="status"></span>
     </div>
@@ -652,7 +660,8 @@ function calc(){
   const sub=oficial+esq+plu;
   const con0=$('tipo').value==='con';
   const N0=con0?0:Math.max(0,Math.min(37,parseInt($('nM').value,10)||0))+Math.max(0,Math.min(24,parseInt($('nE').value,10)||0))+(num($('final').value)>0?1:0);
-  let rate=con0?-12:N0<=6?-8:N0<=12?-4:N0<=25?0:N0<=31?3:8;
+  const vipPct=con0?12:N0<=6?8:N0<=13?4:0;
+  let rate=con0?-12:N0<=6?-8:N0<=13?-4:N0<=25?0:N0<=31?3:8;
   if(rate<0&&!$('aplOf').checked)rate=0;
   const auto=Math.round(sub*rate/100);
   const des=Math.min(sub+auto,adj($('desT').value,$('desV').value,sub+auto));
@@ -669,6 +678,8 @@ function calc(){
   if(ini+permuta>valor)err.push('La cuota inicial y la permuta no pueden sumar más que el valor final del negocio.');
   if(sep>ini)err.push('La separación no puede ser mayor que la cuota inicial.');
   if(nE&&!vE)err.push('Escribe el valor de las cuotas extraordinarias.');
+  const maxE=Math.floor(valor*0.10);
+  if(nE&&vE>maxE)err.push('Cada cuota extraordinaria puede ser máximo de '+$$(maxE)+' (10 % del valor del negocio). Baja el valor o reparte en más cuotas.');
   const N=Math.max(1,nM+nE+(useFinal?1:0));
   const tipo=$('tipo').value;
   if(tipo==='per'&&!permuta)err.push('Escribe el valor de la permuta.');
@@ -696,9 +707,9 @@ function calc(){
   const brk=[['Precio oficial ('+String(area).replace('.',',')+' m² × '+$$(vm2)+')',oficial]];
   if(esq)brk.push([adjLbl('Esquinero',$('esqT').value,$('esqV').value),esq]);
   if(plu)brk.push([adjLbl('Otros',$('pluT').value,$('pluV').value),plu]);
-  if(auto)brk.push([(rate<0?'Descuento '+(con0?'de contado ':'a '+N0+' meses ')+(-rate)+'%':'Financiación a '+N0+' meses +'+rate+'%'),auto]);
+  if(auto)brk.push([(rate<0?'Descuento promocional VIP '+(-rate)+'%':'Financiación a '+N0+' meses +'+rate+'%'),auto]);
   if(des)brk.push([adjLbl('Descuento promocional',$('desT').value,$('desV').value),-des]);
-  return{err,valor,sep,ini,saldo,N,contado,permuta,tipoLbl,first,rows,mensual,nM:rows.filter(r=>r.t==='m').length,fecha,brk,
+  return{err,vipPct,valor,sep,ini,saldo,N,contado,permuta,tipoLbl,maxE,first,rows,mensual,nM:rows.filter(r=>r.t==='m').length,fecha,brk,
     vence:addD(fecha,parseInt($('vig').value,10)||8),
     xs:rows.filter(r=>r.t==='x'),fin:rows.find(r=>r.t==='f'),
     total:rows.reduce((a,r)=>a+r.v,0)};
@@ -728,13 +739,16 @@ const CONC={m:'Cuota mensual',x:'Cuota extraordinaria',f:'Última cuota'};
 
 function render(){
   $('lblOtro').hidden=$('proySel').value!=='otro';
-  {const k=$('tipo').value==='con';$('rowExtras').hidden=k;$('lblFinal').hidden=k;$('lblTipoOtro').hidden=$('tipo').value!=='otr';$('lblPermuta').hidden=$('lblPermDesc').hidden=$('tipo').value!=='per';$('nMtxt').textContent=k?'Número de pagos (1 a 3)':'Número de cuotas mensuales'}
+  {const k=$('tipo').value==='con';$('rowExtras').hidden=$('maxE').hidden=k;$('lblFinal').hidden=k;$('lblTipoOtro').hidden=$('tipo').value!=='otr';$('lblPermuta').hidden=$('lblPermDesc').hidden=$('tipo').value!=='per';$('nMtxt').textContent=k?'Número de pagos (1 a 3)':'Número de cuotas mensuales'}
   const c=calc(),n=info();
   const al=$('alert');al.hidden=!c.err.length;al.textContent=c.err.join(' ');
   $('pdf').disabled=!!c.err.length;
   $('constructora').textContent=n.constr;
-  const brkTxt=c.brk.length>1?c.brk.map((b,i)=>(i?(b[1]<0?'− ':'+ '):'')+b[0]+' '+$$(Math.abs(b[1]))).join('  '):'';
-  $('calcBox').innerHTML=c.brk.map(b=>'<div><span>'+esc(b[0])+'</span><span>'+(b[1]<0?'− ':'')+$$(Math.abs(b[1]))+'</span></div>').join('')+'<div class="t"><span>Valor final del negocio</span><span>'+$$(c.valor)+'</span></div><div><span>'+(c.contado?'Pago de contado':'Cuota mensual calculada')+'</span><span>'+$$(c.mensual)+'</span></div>'+(c.contado?'':'<div><span>Plazo total</span><span>'+c.N+' meses</span></div>');
+  $('vipHint').textContent=c.vipPct?'Para este plan el VIP es del '+c.vipPct+' %. Solo para casos de cierre.':'Este plan no tiene descuento VIP (aplica en contado y hasta 13 meses).';
+  $('maxE').textContent='Máximo por cada cuota extraordinaria: '+$$(c.maxE)+' (10 % del valor del negocio).';
+  const adds=c.brk.slice(1).filter(b=>b[1]>0),dscs=c.brk.filter(b=>b[1]<0),ahorro=dscs.reduce((a,b)=>a-b[1],0);
+  const brkTxt=c.brk.length>1?'<span class="po">'+esc(c.brk[0][0])+' '+$$(c.brk[0][1])+'</span>'+(adds.length?'<span>'+adds.map(b=>'+ '+esc(b[0])+' '+$$(b[1])).join('   ')+'</span>':'')+(dscs.length?'<span class="red">'+dscs.map(b=>'− '+esc(b[0])+' '+$$(-b[1])).join('   ')+'<b>Ahorro: '+$$(ahorro)+'</b></span>':''):'';
+  $('calcBox').innerHTML=c.brk.map(b=>'<div'+(b[1]<0?' class="neg"':'')+'><span>'+esc(b[0])+'</span><span>'+(b[1]<0?'− ':'')+$$(Math.abs(b[1]))+'</span></div>').join('')+'<div class="t"><span>Valor final del negocio</span><span>'+$$(c.valor)+'</span></div><div><span>'+(c.contado?'Pago de contado':'Cuota mensual calculada')+'</span><span>'+$$(c.mensual)+'</span></div>'+(c.contado?'':'<div><span>Plazo total</span><span>'+c.N+' meses</span></div>');
   const N=c.rows.length;
   let tl='<svg class="tl" viewBox="0 0 700 78" role="img" aria-label="Línea de tiempo del plan"><rect x="20" y="38" width="660" height="2" fill="#cfd6d0"/><rect x="17" y="28" width="5" height="22" fill="#1f6b4e"/>';
   c.rows.forEach((r,i)=>{const x=20+660*(i+1)/N;
@@ -750,7 +764,7 @@ function render(){
   '<div class="p-body">'+
   '<div class="split"><div><span class="eyebrow">'+esc(n.proyecto)+'</span><div class="lot">'+esc(n.lot||'Parcela')+'</div><span class="pm">'+esc(n.area)+'</span></div>'+
   '<div style="text-align:right;margin-left:auto"><span class="eyebrow" style="color:var(--paper-muted)">Valor del negocio</span><div class="val">'+$$(c.valor)+'</div><span class="pm">'+esc(c.tipoLbl)+'</span></div></div>'+
-  (brkTxt?'<div class="brk">'+esc(brkTxt)+'</div>':'')+
+  (brkTxt?'<div class="brk">'+brkTxt+'</div>':'')+
   '<div class="parties"><div><span class="eyebrow" style="color:var(--paper-muted)">Cliente</span><strong>'+esc(n.cl[0])+'</strong>'+n.cl.slice(1).map(x=>'<div class="pm">'+esc(x)+'</div>').join('')+'</div>'+
   '<div><span class="eyebrow" style="color:var(--paper-muted)">Asesor comercial</span><strong>'+esc(n.as[0])+'</strong>'+n.as.slice(1).map(x=>'<div class="pm">'+esc(x)+'</div>').join('')+'</div></div>'+
   '<div class="cards"><div class="card"><span class="eyebrow">Separación</span><b>'+$$(c.sep)+'</b><span class="pm">Se paga hoy para apartar el lote</span></div>'+
@@ -798,13 +812,17 @@ function makePdf(c,n){
   T(sp(n.proyecto),L,45,{b:1,sz:6.5,c:G});T(sp('Valor del negocio'),R,45,{sz:6.5,c:MU,a:'right'});
   T(fit(n.lot||'Parcela',110,20,true),L,55,{b:1,sz:20});T($$(c.valor),R,55,{b:1,sz:17,c:G,a:'right'});
   if(n.area)T(fit(n.area,110,9),L,60.5,{sz:9,c:[70,80,74]});T(fit(c.tipoLbl,75,8),R,60.5,{sz:8,c:MU,a:'right'});
-  if(c.brk.length>1)T(fit(c.brk.map((b,i)=>(i?(b[1]<0?'- ':'+ '):'')+b[0]+' '+$$(Math.abs(b[1]))).join('   '),W,6.5),L,65,{sz:6.5,c:MU});
-  hline(67.5);
-  T(sp('Cliente'),L,74,{sz:6.5,c:MU,b:1});T(sp('Asesor comercial'),109,74,{sz:6.5,c:MU,b:1});
-  T(fit(n.cl[0],82,11,true),L,80,{b:1,sz:11});T(fit(n.as[0],82,11,true),109,80,{b:1,sz:11});
-  n.cl.slice(1).forEach((x,i)=>T(fit(x,82,8),L,85+i*4,{sz:8,c:[70,80,74]}));
-  n.as.slice(1).forEach((x,i)=>T(fit(x,82,8.5),109,85.5+i*4.5,{sz:8.5,c:[70,80,74]}));
-  doc.setDrawColor.apply(doc,LN);doc.line(101,71,101,100);hline(102.5);
+  if(c.brk.length>1){const RED=[179,38,30],ad=c.brk.slice(1).filter(b=>b[1]>0),ds=c.brk.filter(b=>b[1]<0);
+    const po=c.brk[0][0]+'  '+$$(c.brk[0][1]);T(po,L,65.8,{b:1,sz:9.5});doc.setFont('helvetica','bold');doc.setFontSize(9.5);const pw=doc.getTextWidth(po);
+    if(ad.length)T(fit(ad.map(b=>'+ '+b[0]+' '+$$(b[1])).join('   '),W-pw-4,7),L+pw+4,65.8,{sz:7,c:MU});
+    if(ds.length){const ah='Ahorro: '+$$(ds.reduce((a,b)=>a-b[1],0));doc.setFont('helvetica','bold');doc.setFontSize(9);const aw=doc.getTextWidth(ah);
+      T(fit(ds.map(b=>'- '+b[0]+' '+$$(-b[1])).join('    '),W-aw-5,8.5,true),L,70.3,{b:1,sz:8.5,c:RED});T(ah,R,70.3,{b:1,sz:9,c:RED,a:'right'})}}
+  hline(72.8);
+  T(sp('Cliente'),L,78,{sz:6.5,c:MU,b:1});T(sp('Asesor comercial'),109,78,{sz:6.5,c:MU,b:1});
+  T(fit(n.cl[0],82,11,true),L,84,{b:1,sz:11});T(fit(n.as[0],82,11,true),109,84,{b:1,sz:11});
+  n.cl.slice(1).forEach((x,i)=>T(fit(x,82,8),L,88.6+i*3.7,{sz:8,c:[70,80,74]}));
+  n.as.slice(1).forEach((x,i)=>T(fit(x,82,8),109,88.6+i*3.7,{sz:8,c:[70,80,74]}));
+  doc.setDrawColor.apply(doc,LN);doc.line(101,76,101,100.5);hline(102.5);
   const cw=(W-8)/3;
   [['Separación',$$(c.sep),'Se paga hoy para apartar el lote',FG],
    ['Cuota inicial',$$(c.ini),'Incluye la separación · faltan '+$$(Math.max(0,c.ini-c.sep)),FG],
@@ -880,6 +898,21 @@ function makePdf(c,n){
 }
 
 function say(t){$('msg').textContent=t}
+const REGISTRO_URL='';
+function registrar(tipo,c,n){
+  if(!REGISTRO_URL)return Promise.resolve(false);
+  const d={registro:tipo,cotizacion:cotNum,ejecutivo:g('asNombre'),cargo:g('asCargo'),cliente:g('clNombre'),cedula:g('clCedula'),expedicion:g('clExp'),celular:g('clCel'),correo:g('clCorreo'),direccion:g('clDir'),ocupacion:g('clOcu'),estadoCivil:g('clCivil'),autoriza:$('clAut').checked?'Sí':'No',
+    proyecto:n.proyecto,parcela:n.lot,area:n.area,tipoNegocio:c.tipoLbl,valorFinal:c.valor,separacion:c.sep,cuotaInicial:c.ini,permuta:c.permuta,plazoMeses:c.contado?0:c.N,cuotaMensual:c.mensual,observaciones:n.obs};
+  return fetch(REGISTRO_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(d)}).then(()=>true,()=>false);
+}
+$('sepBtn').hidden=!REGISTRO_URL;
+$('sepBtn').addEventListener('click',async()=>{
+  const c=render();if(c.err.length)return;
+  if(!g('clNombre')||!g('clCel')||g('clNombre')==='Cliente de ejemplo'){say('Escribe el nombre y el celular del cliente antes de registrar la separación.');return}
+  say('Registrando…');$('sepBtn').disabled=true;
+  const ok=await registrar('Separación',c,info());$('sepBtn').disabled=false;
+  say(ok?'Separación '+cotNum+' registrada.':'No se pudo registrar: revisa tu conexión a internet e intenta de nuevo.');
+});
 $('pdf').addEventListener('click',async()=>{
   const c=render();if(c.err.length)return;const n=info();
   say('Preparando PDF…');
@@ -888,6 +921,7 @@ $('pdf').addEventListener('click',async()=>{
     const pdfDoc=makePdf(c,n);
     const nombre=n.cl[0].normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'');
     pdfDoc.save('Cotizacion_'+cotNum+'_'+nombre+'.pdf');
+    registrar('Cotización',c,n);
     say('PDF descargado.');
   }catch(e){
     say(e&&e.code==='declined'?'Descarga cancelada.':e&&e.code==='lib'?'No se pudo cargar el generador de PDF. Recarga la página.':e&&e.code==='rate_limited'?'Ya hay una descarga pendiente de confirmar.':'No se pudo generar el PDF. Intenta de nuevo.');
@@ -902,7 +936,7 @@ $('copy').addEventListener('click',()=>{
   try{navigator.clipboard.writeText(t).then(()=>say('Resumen copiado.'),fb)}catch(e){fb()}
 });
 $('nueva').addEventListener('click',()=>{
-  ['clNombre','clCedula','clExp','clCel','clCorreo','clDir','clOcu','clCivil','obs'].forEach(id=>$(id).value='');
+  ['clNombre','clCedula','clExp','clCel','clCorreo','clDir','clOcu','clCivil','obs'].forEach(id=>$(id).value='');$('clAut').checked=false;
   const d=today();$('fecha').value=iso(d);cotNum=newNum(d);render();say('Nueva cotización '+cotNum+'.');$('clNombre').focus();
 });
 document.querySelectorAll('#f .money').forEach(el=>el.addEventListener('blur',()=>{el.value=fmt(num(el.value))}));
