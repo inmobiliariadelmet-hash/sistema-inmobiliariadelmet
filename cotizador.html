@@ -905,7 +905,7 @@ function registrar(tipo,c,n,pdf){
     proyecto:n.proyecto,parcela:n.lot,area:n.area,tipoNegocio:c.tipoLbl,valorFinal:c.valor,separacion:c.sep,cuotaInicial:c.ini,permuta:c.permuta,plazoMeses:c.contado?0:c.N,cuotaMensual:c.mensual,observaciones:n.obs,pdf:pdf||''};
   return fetch(REGISTRO_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(d)}).then(()=>true,()=>false);
 }
-$('sepBtn').hidden=!REGISTRO_URL;
+$('sepBtn').hidden=true;
 $('sepBtn').addEventListener('click',async()=>{
   const c=render();if(c.err.length)return;
   if(!g('clNombre')||!g('clCel')||g('clNombre')==='Cliente de ejemplo'){say('Escribe el nombre y el celular del cliente antes de registrar la separación.');return}
@@ -915,18 +915,20 @@ $('sepBtn').addEventListener('click',async()=>{
 });
 $('pdf').addEventListener('click',async()=>{
   const c=render();if(c.err.length)return;const n=info();
-  say('Preparando PDF…');
+  if(!g('clNombre')||!g('clCel')||g('clNombre')==='Cliente de ejemplo'){say('Escribe el nombre y el celular del cliente antes de descargar el PDF.');$(g('clNombre')?'clCel':'clNombre').focus();return}
+  say('Preparando PDF…');$('pdf').disabled=true;
   try{
     if(!window.jspdf)throw{code:'lib'};
     const pdfDoc=makePdf(c,n);
-    const nombre=n.cl[0].normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'');
-    pdfDoc.save('Cotizacion_'+cotNum+'_'+nombre+'.pdf');
     let b64='';try{b64=pdfDoc.output('datauristring').split(',')[1]||''}catch(_){}
-    registrar('Cotización',c,n,b64);
-    say('PDF descargado.');
+    const reg=registrar('Cotización',c,n,b64);
+    const nombre=n.cl[0].normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'');
+    try{pdfDoc.save('Cotizacion_'+cotNum+'_'+nombre+'.pdf')}catch(e){}
+    const ok=await reg;
+    say(ok?'PDF descargado.':'PDF descargado. Revisa tu conexión a internet.');
   }catch(e){
-    say(e&&e.code==='declined'?'Descarga cancelada.':e&&e.code==='lib'?'No se pudo cargar el generador de PDF. Recarga la página.':e&&e.code==='rate_limited'?'Ya hay una descarga pendiente de confirmar.':'No se pudo generar el PDF. Intenta de nuevo.');
-  }
+    say(e&&e.code==='lib'?'No se pudo cargar el generador de PDF. Recarga la página.':'No se pudo generar el PDF. Intenta de nuevo.');
+  }finally{$('pdf').disabled=false}
 });
 $('copy').addEventListener('click',()=>{
   const c=render();if(c.err.length)return;const n=info();
