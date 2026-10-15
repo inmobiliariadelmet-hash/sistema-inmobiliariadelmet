@@ -898,11 +898,11 @@ function makePdf(c,n){
 }
 
 function say(t){$('msg').textContent=t}
-const REGISTRO_URL='';
-function registrar(tipo,c,n){
+const REGISTRO_URL='https://script.google.com/macros/s/AKfycby7hQ6ue4RabmTRxC58fipsWxqvTGxcHhMieP8PDaMGDz3DqGu9JO_vSzSVEF13_q0wpQ/exec';
+function registrar(tipo,c,n,pdf){
   if(!REGISTRO_URL)return Promise.resolve(false);
   const d={registro:tipo,cotizacion:cotNum,ejecutivo:g('asNombre'),cargo:g('asCargo'),cliente:g('clNombre'),cedula:g('clCedula'),expedicion:g('clExp'),celular:g('clCel'),correo:g('clCorreo'),direccion:g('clDir'),ocupacion:g('clOcu'),estadoCivil:g('clCivil'),autoriza:$('clAut').checked?'Sí':'No',
-    proyecto:n.proyecto,parcela:n.lot,area:n.area,tipoNegocio:c.tipoLbl,valorFinal:c.valor,separacion:c.sep,cuotaInicial:c.ini,permuta:c.permuta,plazoMeses:c.contado?0:c.N,cuotaMensual:c.mensual,observaciones:n.obs};
+    proyecto:n.proyecto,parcela:n.lot,area:n.area,tipoNegocio:c.tipoLbl,valorFinal:c.valor,separacion:c.sep,cuotaInicial:c.ini,permuta:c.permuta,plazoMeses:c.contado?0:c.N,cuotaMensual:c.mensual,observaciones:n.obs,pdf:pdf||''};
   return fetch(REGISTRO_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(d)}).then(()=>true,()=>false);
 }
 $('sepBtn').hidden=!REGISTRO_URL;
@@ -921,7 +921,8 @@ $('pdf').addEventListener('click',async()=>{
     const pdfDoc=makePdf(c,n);
     const nombre=n.cl[0].normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'');
     pdfDoc.save('Cotizacion_'+cotNum+'_'+nombre+'.pdf');
-    registrar('Cotización',c,n);
+    let b64='';try{b64=pdfDoc.output('datauristring').split(',')[1]||''}catch(_){}
+    registrar('Cotización',c,n,b64);
     say('PDF descargado.');
   }catch(e){
     say(e&&e.code==='declined'?'Descarga cancelada.':e&&e.code==='lib'?'No se pudo cargar el generador de PDF. Recarga la página.':e&&e.code==='rate_limited'?'Ya hay una descarga pendiente de confirmar.':'No se pudo generar el PDF. Intenta de nuevo.');
