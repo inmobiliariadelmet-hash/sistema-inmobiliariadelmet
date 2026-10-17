@@ -195,6 +195,7 @@ td.n,th.n{text-align:right}
       </div>
       <p class="hint" id="maxE"></p>
       <label id="lblFinal">Última cuota antes de escritura (0 si no hay)<input id="final" class="money" inputmode="numeric" value="4.885.884"></label>
+      <p class="hint" id="finHint"></p>
       <p class="hint">Sin intereses. En financiado y permuta el plazo (mensuales + extraordinarias + última cuota) va de 3 a 37 meses. La cuota se calcula sola: valor final − cuota inicial − permuta − extraordinarias − última cuota, dividido entre el número de cuotas mensuales. En el mes de una extraordinaria no se cobra cuota mensual.</p>
       <label>Observaciones<textarea id="obs" placeholder="Ej.: negocio cotizado en lanzamiento, descuento financiado hasta 37 meses"></textarea></label>
     </fieldset>
@@ -651,7 +652,8 @@ const dec=s=>parseFloat(String(s).replace(/\./g,'').replace(',','.'))||0;
 const pct=s=>parseFloat(String(s).replace(',','.'))||0;
 function adj(t,v,base){return t==='PORCENTAJE'?Math.max(0,Math.round(base*pct(v)/100)):t==='VALOR FIJO'?Math.max(0,num(v)):0}
 function adjLbl(n,t,v){return n+(t==='PORCENTAJE'?' '+String(pct(v)).replace('.',',')+'%':'')}
-let cotNum='';
+let cotNum='',autoE=true,autoF=true;
+function setH(el,h){if(el._h!==h){el.innerHTML=h;el._h=h}}
 function calc(){
   const err=[];
   const area=parseFloat(String($('area').value).replace(',','.'))||0,vm2=num($('vm2').value);
@@ -671,6 +673,11 @@ function calc(){
   CONC.m=contado?'Pago de contado':'Cuota mensual';
   const saldo=valor-ini-permuta;
   const nM=contado?Math.max(1,Math.min(3,parseInt($('nM').value,10)||1)):Math.max(0,Math.min(37,parseInt($('nM').value,10)||0));
+  const nEr=Math.max(0,Math.min(24,parseInt($('nE').value,10)||0)),finPct=(nM+nEr+1)===37?15:10;
+  if(!contado){
+    if(autoE&&nEr)$('vE').value=fmt(Math.floor(valor*0.10));
+    if(autoF)$('final').value=fmt(Math.floor(valor*finPct/100));
+  }
   const nE=contado?0:Math.max(0,Math.min(24,parseInt($('nE').value,10)||0)),vE=nE?num($('vE').value):0,pE=Math.max(1,parseInt($('pE').value,10)||1);
   const finalIn=contado?0:num($('final').value),useFinal=finalIn>0;
   const first=parseD($('primera').value)||today();
@@ -709,7 +716,7 @@ function calc(){
   if(plu)brk.push([adjLbl('Otros',$('pluT').value,$('pluV').value),plu]);
   if(auto)brk.push([(rate<0?'Descuento promocional VIP '+(-rate)+'%':'Financiación a '+N0+' meses +'+rate+'%'),auto]);
   if(des)brk.push([adjLbl('Descuento promocional',$('desT').value,$('desV').value),-des]);
-  return{err,vipPct,valor,sep,ini,saldo,N,contado,permuta,tipoLbl,maxE,first,rows,mensual,nM:rows.filter(r=>r.t==='m').length,fecha,brk,
+  return{err,vipPct,finPct,valor,sep,ini,saldo,N,contado,permuta,tipoLbl,maxE,first,rows,mensual,nM:rows.filter(r=>r.t==='m').length,fecha,brk,
     vence:addD(fecha,parseInt($('vig').value,10)||8),
     xs:rows.filter(r=>r.t==='x'),fin:rows.find(r=>r.t==='f'),
     total:rows.reduce((a,r)=>a+r.v,0)};
@@ -739,13 +746,14 @@ const CONC={m:'Cuota mensual',x:'Cuota extraordinaria',f:'Última cuota'};
 
 function render(){
   $('lblOtro').hidden=$('proySel').value!=='otro';
-  {const k=$('tipo').value==='con';$('rowExtras').hidden=$('maxE').hidden=k;$('lblFinal').hidden=k;$('lblTipoOtro').hidden=$('tipo').value!=='otr';$('lblPermuta').hidden=$('lblPermDesc').hidden=$('tipo').value!=='per';$('nMtxt').textContent=k?'Número de pagos (1 a 3)':'Número de cuotas mensuales'}
+  {const k=$('tipo').value==='con';$('rowExtras').hidden=$('maxE').hidden=$('finHint').hidden=k;$('lblFinal').hidden=k;$('lblTipoOtro').hidden=$('tipo').value!=='otr';$('lblPermuta').hidden=$('lblPermDesc').hidden=$('tipo').value!=='per';$('nMtxt').textContent=k?'Número de pagos (1 a 3)':'Número de cuotas mensuales'}
   const c=calc(),n=info();
   const al=$('alert');al.hidden=!c.err.length;al.textContent=c.err.join(' ');
   $('pdf').disabled=!!c.err.length;
   $('constructora').textContent=n.constr;
   $('vipHint').textContent=c.vipPct?'Para este plan el VIP es del '+c.vipPct+' %. Solo para casos de cierre.':'Este plan no tiene descuento VIP (aplica en contado y hasta 13 meses).';
-  $('maxE').textContent='Máximo por cada cuota extraordinaria: '+$$(c.maxE)+' (10 % del valor del negocio).';
+  setH($('maxE'),autoE?'Automático: cada extraordinaria es el 10 % del valor del negocio ('+$$(c.maxE)+'). Si escribe otro valor, el máximo es ese.':'Valor manual · máximo '+$$(c.maxE)+' (10 % del valor del negocio). <button type="button" class="link">Volver al 10 %</button>');
+  setH($('finHint'),autoF?'Automático: '+c.finPct+' % del valor del negocio'+(c.finPct===15?' (plan a 37 meses)':'')+'. Puede escribir otro valor.':'Valor manual. <button type="button" class="link">Volver al '+c.finPct+' %</button>');
   const adds=c.brk.slice(1).filter(b=>b[1]>0),dscs=c.brk.filter(b=>b[1]<0),ahorro=dscs.reduce((a,b)=>a-b[1],0);
   const brkTxt=c.brk.length>1?'<span class="po">'+esc(c.brk[0][0])+' '+$$(c.brk[0][1])+'</span>'+(adds.length?'<span>'+adds.map(b=>'+ '+esc(b[0])+' '+$$(b[1])).join('   ')+'</span>':'')+(dscs.length?'<span class="red">'+dscs.map(b=>'− '+esc(b[0])+' '+$$(-b[1])).join('   ')+'<b>Ahorro: '+$$(ahorro)+'</b></span>':''):'';
   $('calcBox').innerHTML=c.brk.map(b=>'<div'+(b[1]<0?' class="neg"':'')+'><span>'+esc(b[0])+'</span><span>'+(b[1]<0?'− ':'')+$$(Math.abs(b[1]))+'</span></div>').join('')+'<div class="t"><span>Valor final del negocio</span><span>'+$$(c.valor)+'</span></div><div><span>'+(c.contado?'Pago de contado':'Cuota mensual calculada')+'</span><span>'+$$(c.mensual)+'</span></div>'+(c.contado?'':'<div><span>Plazo total</span><span>'+c.N+' meses</span></div>');
@@ -898,14 +906,14 @@ function makePdf(c,n){
 }
 
 function say(t){$('msg').textContent=t}
-const REGISTRO_URL='https://script.google.com/macros/s/AKfycby7hQ6ue4RabmTRxC58fipsWxqvTGxcHhMieP8PDaMGDz3DqGu9JO_vSzSVEF13_q0wpQ/exec';
-function registrar(tipo,c,n,pdf){
+const REGISTRO_URL='';
+function registrar(tipo,c,n){
   if(!REGISTRO_URL)return Promise.resolve(false);
   const d={registro:tipo,cotizacion:cotNum,ejecutivo:g('asNombre'),cargo:g('asCargo'),cliente:g('clNombre'),cedula:g('clCedula'),expedicion:g('clExp'),celular:g('clCel'),correo:g('clCorreo'),direccion:g('clDir'),ocupacion:g('clOcu'),estadoCivil:g('clCivil'),autoriza:$('clAut').checked?'Sí':'No',
-    proyecto:n.proyecto,parcela:n.lot,area:n.area,tipoNegocio:c.tipoLbl,valorFinal:c.valor,separacion:c.sep,cuotaInicial:c.ini,permuta:c.permuta,plazoMeses:c.contado?0:c.N,cuotaMensual:c.mensual,observaciones:n.obs,pdf:pdf||''};
+    proyecto:n.proyecto,parcela:n.lot,area:n.area,tipoNegocio:c.tipoLbl,valorFinal:c.valor,separacion:c.sep,cuotaInicial:c.ini,permuta:c.permuta,plazoMeses:c.contado?0:c.N,cuotaMensual:c.mensual,observaciones:n.obs};
   return fetch(REGISTRO_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(d)}).then(()=>true,()=>false);
 }
-$('sepBtn').hidden=true;
+$('sepBtn').hidden=!REGISTRO_URL;
 $('sepBtn').addEventListener('click',async()=>{
   const c=render();if(c.err.length)return;
   if(!g('clNombre')||!g('clCel')||g('clNombre')==='Cliente de ejemplo'){say('Escribe el nombre y el celular del cliente antes de registrar la separación.');return}
@@ -915,20 +923,17 @@ $('sepBtn').addEventListener('click',async()=>{
 });
 $('pdf').addEventListener('click',async()=>{
   const c=render();if(c.err.length)return;const n=info();
-  if(!g('clNombre')||!g('clCel')||g('clNombre')==='Cliente de ejemplo'){say('Escribe el nombre y el celular del cliente antes de descargar el PDF.');$(g('clNombre')?'clCel':'clNombre').focus();return}
-  say('Preparando PDF…');$('pdf').disabled=true;
+  say('Preparando PDF…');
   try{
     if(!window.jspdf)throw{code:'lib'};
     const pdfDoc=makePdf(c,n);
-    let b64='';try{b64=pdfDoc.output('datauristring').split(',')[1]||''}catch(_){}
-    const reg=registrar('Cotización',c,n,b64);
     const nombre=n.cl[0].normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'');
-    try{pdfDoc.save('Cotizacion_'+cotNum+'_'+nombre+'.pdf')}catch(e){}
-    const ok=await reg;
-    say(ok?'PDF descargado.':'PDF descargado. Revisa tu conexión a internet.');
+    pdfDoc.save('Cotizacion_'+cotNum+'_'+nombre+'.pdf');
+    registrar('Cotización',c,n);
+    say('PDF descargado.');
   }catch(e){
-    say(e&&e.code==='lib'?'No se pudo cargar el generador de PDF. Recarga la página.':'No se pudo generar el PDF. Intenta de nuevo.');
-  }finally{$('pdf').disabled=false}
+    say(e&&e.code==='declined'?'Descarga cancelada.':e&&e.code==='lib'?'No se pudo cargar el generador de PDF. Recarga la página.':e&&e.code==='rate_limited'?'Ya hay una descarga pendiente de confirmar.':'No se pudo generar el PDF. Intenta de nuevo.');
+  }
 });
 $('copy').addEventListener('click',()=>{
   const c=render();if(c.err.length)return;const n=info();
@@ -938,7 +943,11 @@ $('copy').addEventListener('click',()=>{
   const fb=()=>{const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='width:100%;height:160px;margin-top:8px';$('msg').textContent='Copia el texto: ';$('msg').appendChild(ta);ta.select()};
   try{navigator.clipboard.writeText(t).then(()=>say('Resumen copiado.'),fb)}catch(e){fb()}
 });
-$('nueva').addEventListener('click',()=>{
+$('vE').addEventListener('input',()=>{autoE=false});
+$('final').addEventListener('input',()=>{autoF=false});
+$('maxE').addEventListener('click',e=>{if(e.target.tagName==='BUTTON'){autoE=true;render()}});
+$('finHint').addEventListener('click',e=>{if(e.target.tagName==='BUTTON'){autoF=true;render()}});
+$('nueva').addEventListener('click',()=>{autoE=true;autoF=true;
   ['clNombre','clCedula','clExp','clCel','clCorreo','clDir','clOcu','clCivil','obs'].forEach(id=>$(id).value='');$('clAut').checked=false;
   const d=today();$('fecha').value=iso(d);cotNum=newNum(d);render();say('Nueva cotización '+cotNum+'.');$('clNombre').focus();
 });
