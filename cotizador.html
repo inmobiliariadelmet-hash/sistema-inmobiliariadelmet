@@ -906,7 +906,7 @@ function makePdf(c,n){
 }
 
 function say(t){$('msg').textContent=t}
-const REGISTRO_URL='';
+const REGISTRO_URL='https://script.google.com/macros/s/AKfycby509JK1TbGHyBu_kw9ecuV39srUHuy-60SVb7LguUV1lf-rKjNOl7EF3G3YscIGX3JqQ/exec';
 function registrar(tipo,c,n){
   if(!REGISTRO_URL)return Promise.resolve(false);
   const d={registro:tipo,cotizacion:cotNum,ejecutivo:g('asNombre'),cargo:g('asCargo'),cliente:g('clNombre'),cedula:g('clCedula'),expedicion:g('clExp'),celular:g('clCel'),correo:g('clCorreo'),direccion:g('clDir'),ocupacion:g('clOcu'),estadoCivil:g('clCivil'),autoriza:$('clAut').checked?'Sí':'No',
