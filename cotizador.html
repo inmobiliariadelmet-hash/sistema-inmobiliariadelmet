@@ -211,7 +211,7 @@ td.n,th.n{text-align:right}
   <div class="side">
     <div class="actions">
       <button class="primary" id="pdf" type="button">Descargar PDF</button>
-      <button id="copy" type="button">Copiar resumen para WhatsApp</button>
+      <button id="copy" type="button" hidden>Copiar resumen para WhatsApp</button>
       <button id="sepBtn" type="button" hidden>Registrar separación</button>
       <button id="nueva" type="button">Nueva cotización</button>
       <span class="msg" id="msg" role="status"></span>
@@ -907,13 +907,13 @@ function makePdf(c,n){
 
 function say(t){$('msg').textContent=t}
 const REGISTRO_URL='https://script.google.com/macros/s/AKfycby509JK1TbGHyBu_kw9ecuV39srUHuy-60SVb7LguUV1lf-rKjNOl7EF3G3YscIGX3JqQ/exec';
-function registrar(tipo,c,n){
+function registrar(tipo,c,n,pdf,pdfNombre){
   if(!REGISTRO_URL)return Promise.resolve(false);
   const d={registro:tipo,cotizacion:cotNum,ejecutivo:g('asNombre'),cargo:g('asCargo'),cliente:g('clNombre'),cedula:g('clCedula'),expedicion:g('clExp'),celular:g('clCel'),correo:g('clCorreo'),direccion:g('clDir'),ocupacion:g('clOcu'),estadoCivil:g('clCivil'),autoriza:$('clAut').checked?'Sí':'No',
-    proyecto:n.proyecto,parcela:n.lot,area:n.area,tipoNegocio:c.tipoLbl,valorFinal:c.valor,separacion:c.sep,cuotaInicial:c.ini,permuta:c.permuta,plazoMeses:c.contado?0:c.N,cuotaMensual:c.mensual,observaciones:n.obs};
+    proyecto:n.proyecto,parcela:n.lot,area:n.area,tipoNegocio:c.tipoLbl,valorFinal:c.valor,separacion:c.sep,cuotaInicial:c.ini,permuta:c.permuta,plazoMeses:c.contado?0:c.N,cuotaMensual:c.mensual,observaciones:n.obs,pdf:pdf||'',pdfNombre:pdfNombre||''};
   return fetch(REGISTRO_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(d)}).then(()=>true,()=>false);
 }
-$('sepBtn').hidden=!REGISTRO_URL;
+$('sepBtn').hidden=true;
 $('sepBtn').addEventListener('click',async()=>{
   const c=render();if(c.err.length)return;
   if(!g('clNombre')||!g('clCel')||g('clNombre')==='Cliente de ejemplo'){say('Escribe el nombre y el celular del cliente antes de registrar la separación.');return}
@@ -928,9 +928,10 @@ $('pdf').addEventListener('click',async()=>{
     if(!window.jspdf)throw{code:'lib'};
     const pdfDoc=makePdf(c,n);
     const nombre=n.cl[0].normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'');
-    pdfDoc.save('Cotizacion_'+cotNum+'_'+nombre+'.pdf');
-    registrar('Cotización',c,n);
-    say('PDF descargado.');
+    const fname='Cotizacion_'+cotNum+'_'+nombre+'.pdf';
+    pdfDoc.save(fname);
+    registrar('Cotización',c,n,pdfDoc.output('datauristring').split(',')[1],fname);
+    say(REGISTRO_URL?'PDF descargado. Copia enviada a Google Drive.':'PDF descargado.');
   }catch(e){
     say(e&&e.code==='declined'?'Descarga cancelada.':e&&e.code==='lib'?'No se pudo cargar el generador de PDF. Recarga la página.':e&&e.code==='rate_limited'?'Ya hay una descarga pendiente de confirmar.':'No se pudo generar el PDF. Intenta de nuevo.');
   }
