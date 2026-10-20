@@ -931,9 +931,8 @@ $('pdf').addEventListener('click',async()=>{
     const nombre=n.cl[0].normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'');
     const fname='Cotizacion_'+cotNum+'_'+nombre+'.pdf';
     let b64='';try{b64=pdfDoc.output('datauristring').split(',')[1]||''}catch(_){}
-    const reg=registrar('Cotización',c,n,b64,fname);
+    const ok=await Promise.race([registrar('Cotización',c,n,b64,fname),new Promise(r=>setTimeout(()=>r(false),20000))]);
     try{pdfDoc.save(fname)}catch(e){}
-    const ok=await reg;
     say(ok?'PDF descargado.':'PDF descargado. Revisa tu conexión a internet.');
   }catch(e){
     say(e&&e.code==='lib'?'No se pudo cargar el generador de PDF. Recarga la página.':'No se pudo generar el PDF. Intenta de nuevo.');
