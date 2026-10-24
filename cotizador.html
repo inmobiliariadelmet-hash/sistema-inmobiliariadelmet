@@ -923,20 +923,19 @@ $('sepBtn').addEventListener('click',async()=>{
 });
 $('pdf').addEventListener('click',async()=>{
   const c=render();if(c.err.length)return;const n=info();
-  if(!g('clNombre')||!g('clCel')||g('clNombre')==='Cliente de ejemplo'){say('Escribe el nombre y el celular del cliente antes de descargar el PDF.');$(g('clNombre')?'clCel':'clNombre').focus();return}
-  say('Preparando PDF…');$('pdf').disabled=true;
+  say('Preparando PDF…');
   try{
     if(!window.jspdf)throw{code:'lib'};
     const pdfDoc=makePdf(c,n);
     const nombre=n.cl[0].normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9]+/g,'-').replace(/^-|-$/g,'');
-    const fname='Cotizacion_'+cotNum+'_'+nombre+'.pdf';
-    let b64='';try{b64=pdfDoc.output('datauristring').split(',')[1]||''}catch(_){}
-    const ok=await Promise.race([registrar('Cotización',c,n,b64,fname),new Promise(r=>setTimeout(()=>r(false),20000))]);
-    try{pdfDoc.save(fname)}catch(e){}
-    say(ok?'PDF descargado.':'PDF descargado. Revisa tu conexión a internet.');
+    const limpio=t=>String(t||'').replace(/[\\/:*?<>|\x22]+/g,' ').replace(/\s+/g,' ').trim();
+    const fname=['Cotizacion',limpio(g('clNombre'))||'Cliente',limpio(g('clCel'))].filter(Boolean).join('_')+'.pdf';
+    pdfDoc.save(fname);
+    registrar('Cotización',c,n,pdfDoc.output('datauristring').split(',')[1],fname);
+    say(REGISTRO_URL?'PDF descargado. Copia enviada a Google Drive.':'PDF descargado.');
   }catch(e){
-    say(e&&e.code==='lib'?'No se pudo cargar el generador de PDF. Recarga la página.':'No se pudo generar el PDF. Intenta de nuevo.');
-  }finally{$('pdf').disabled=false}
+    say(e&&e.code==='declined'?'Descarga cancelada.':e&&e.code==='lib'?'No se pudo cargar el generador de PDF. Recarga la página.':e&&e.code==='rate_limited'?'Ya hay una descarga pendiente de confirmar.':'No se pudo generar el PDF. Intenta de nuevo.');
+  }
 });
 $('copy').addEventListener('click',()=>{
   const c=render();if(c.err.length)return;const n=info();
