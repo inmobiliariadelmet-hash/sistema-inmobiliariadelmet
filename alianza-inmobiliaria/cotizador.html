@@ -929,9 +929,9 @@ $('pdf').addEventListener('click',async()=>{
     const limpio=t=>String(t||'').replace(/[\\/:*?<>|\x22]+/g,' ').replace(/\s+/g,' ').trim();
     const fname=['Cotizacion',limpio(g('clNombre'))||'Cliente',limpio(g('clCel'))].filter(Boolean).join('_')+'.pdf';
     let ok=false;
-    if(REGISTRO_URL){say('Guardando copia en Google Drive…');ok=await Promise.race([registrar('Cotización',c,n,pdfDoc.output('datauristring').split(',')[1],fname),new Promise(r=>setTimeout(()=>r(false),15000))]);}
+    if(REGISTRO_URL){ok=await Promise.race([registrar('Cotización',c,n,pdfDoc.output('datauristring').split(',')[1],fname),new Promise(r=>setTimeout(()=>r(false),15000))]);}
     pdfDoc.save(fname);
-    say(!REGISTRO_URL?'PDF descargado.':ok?'PDF descargado. Copia guardada en Google Drive.':'PDF descargado, pero no se pudo enviar la copia a Google Drive. Revisa tu conexión y vuelve a descargarlo.');
+    say('PDF descargado.');
   }catch(e){
     say(e&&e.code==='declined'?'Descarga cancelada.':e&&e.code==='lib'?'No se pudo cargar el generador de PDF. Recarga la página.':e&&e.code==='rate_limited'?'Ya hay una descarga pendiente de confirmar.':'No se pudo generar el PDF. Intenta de nuevo.');
   }
