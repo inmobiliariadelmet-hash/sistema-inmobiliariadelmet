@@ -924,6 +924,7 @@ $('sepBtn').addEventListener('click',async()=>{
 });
 $('pdf').addEventListener('click',async()=>{
   const c=render();if(c.err.length)return;const n=info();
+  if(!g('clNombre')||g('clNombre')==='Cliente de ejemplo'||g('clCel').replace(/\D/g,'').length<7){say('Escribe el nombre y el teléfono del cliente para poder descargar el PDF.');$(!g('clNombre')||g('clNombre')==='Cliente de ejemplo'?'clNombre':'clCel').focus();return}
   say('Preparando PDF…');
   try{
     if(!window.jspdf)throw{code:'lib'};
