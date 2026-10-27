@@ -70,6 +70,7 @@ textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(
 .p-body{padding:20px 24px;display:grid;gap:18px}
 .split{display:flex;flex-wrap:wrap;gap:12px 24px;justify-content:space-between;align-items:flex-end}
 .lot{font-size:28px;font-weight:700;line-height:1.1;margin:4px 0}
+.proj{display:block;font-size:26px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#1d3f72;line-height:1.15}
 .val{font-size:24px;font-weight:700;color:#1d3f72}
 .pm{color:var(--paper-muted);font-size:12.5px}
 .parties{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;border-block:1px solid var(--paper-line);padding-block:14px}
@@ -768,7 +769,7 @@ function render(){
   '<div class="p-head"><div><b>'+esc(n.empresa)+'</b><small>'+esc(n.ciudad)+'</small><small>'+esc(n.constr)+'</small></div>'+
   '<div class="r"><span class="eyebrow">Cotización</span><br><b>'+esc(cotNum)+'</b><small>'+largo(c.fecha)+'</small><span class="pill">Válida hasta el '+largo(c.vence)+'</span></div></div>'+
   '<div class="p-body">'+
-  '<div class="split"><div><span class="eyebrow">'+esc(n.proyecto)+'</span><div class="lot">'+esc(n.lot||'Parcela')+'</div><span class="pm">'+esc(n.area)+'</span></div>'+
+  '<div class="split"><div><span class="proj">'+esc(n.proyecto)+'</span><div class="lot">'+esc(n.lot||'Parcela')+(g('area')?' · '+esc(g('area'))+' m²':'')+'</div>'+(g('medidas')?'<span class="pm">'+esc(g('medidas'))+'</span>':'')+'</div>'+
   '<div style="text-align:right;margin-left:auto"><span class="eyebrow" style="color:var(--paper-muted)">Valor del negocio</span><div class="val">'+$$(c.valor)+'</div><span class="pm">'+esc(c.tipoLbl)+'</span></div></div>'+
   (brkTxt?'<div class="brk">'+brkTxt+'</div>':'')+
   '<div class="parties"><div><span class="eyebrow" style="color:var(--paper-muted)">Cliente</span><strong>'+esc(n.cl[0])+'</strong>'+n.cl.slice(1).map(x=>'<div class="pm">'+esc(x)+'</div>').join('')+'</div>'+
@@ -815,9 +816,9 @@ function makePdf(c,n){
   head(false);
   doc.setFillColor.apply(doc,GD);doc.roundedRect(139,29.5,55,9,1.5,1.5,'F');
   T('Válida hasta el '+largo(c.vence),166.5,35.3,{b:1,sz:7.5,c:[255,255,255],a:'center'});
-  T(sp(n.proyecto),L,45,{b:1,sz:6.5,c:G});T(sp('Valor del negocio'),R,45,{sz:6.5,c:MU,a:'right'});
-  T(fit(n.lot||'Parcela',110,20,true),L,55,{b:1,sz:20});T($$(c.valor),R,55,{b:1,sz:17,c:G,a:'right'});
-  if(n.area)T(fit(n.area,110,9),L,60.5,{sz:9,c:[70,80,74]});T(fit(c.tipoLbl,75,8),R,60.5,{sz:8,c:MU,a:'right'});
+  {let ps=16;const pn=String(n.proyecto).toUpperCase();doc.setFont('helvetica','bold');doc.setFontSize(ps);while(doc.getTextWidth(pn)>118&&ps>8){ps-=.5;doc.setFontSize(ps)}T(pn,L,46,{b:1,sz:ps,c:G})}T(sp('Valor del negocio'),R,45,{sz:6.5,c:MU,a:'right'});
+  {const lt=(n.lot||'Parcela')+(g('area')?' · '+g('area')+' m²':'');let ls=20;doc.setFont('helvetica','bold');doc.setFontSize(ls);while(doc.getTextWidth(lt)>125&&ls>12){ls-=.5;doc.setFontSize(ls)}T(lt,L,55,{b:1,sz:ls})}T($$(c.valor),R,55,{b:1,sz:17,c:G,a:'right'});
+  if(g('medidas'))T(fit(g('medidas'),110,9),L,60.5,{sz:9,c:[70,80,74]});T(fit(c.tipoLbl,75,8),R,60.5,{sz:8,c:MU,a:'right'});
   if(c.brk.length>1){const RED=[179,38,30],ad=c.brk.slice(1).filter(b=>b[1]>0),ds=c.brk.filter(b=>b[1]<0);
     const po=c.brk[0][0]+'  '+$$(c.brk[0][1]);T(po,L,65.8,{b:1,sz:9.5});doc.setFont('helvetica','bold');doc.setFontSize(9.5);const pw=doc.getTextWidth(po);
     if(ad.length)T(fit(ad.map(b=>'+ '+b[0]+' '+$$(b[1])).join('   '),W-pw-4,7),L+pw+4,65.8,{sz:7,c:MU});
@@ -921,6 +922,7 @@ $('sepBtn').addEventListener('click',async()=>{
 });
 $('pdf').addEventListener('click',async()=>{
   const c=render();if(c.err.length)return;const n=info();
+  if(!g('clNombre')||g('clNombre')==='Cliente de ejemplo'||g('clCel').replace(/\D/g,'').length<7){say('Escribe el nombre y el teléfono del cliente para poder descargar el PDF.');$(!g('clNombre')||g('clNombre')==='Cliente de ejemplo'?'clNombre':'clCel').focus();return}
   say('Preparando PDF…');
   try{
     if(!window.jspdf)throw{code:'lib'};
